@@ -36,10 +36,14 @@ TEST_CASE("C.1.1. Example 1: Encoding 10 Using a 5-Bit Prefix")
   auto const prefix = 5;
   auto const value  = 10;
 
+  REQUIRE(value == 0b01010);
+
   auto storage = u8{0};
   auto buf     = potok::span<u8>(&storage, 1);
 
   potok::hpack::encode_integer(prefix, value, buf);
+
+  storage = storage & (0b11111000);
 
   REQUIRE(storage == u8{0b01010000});
   REQUIRE(storage == u8{80});
