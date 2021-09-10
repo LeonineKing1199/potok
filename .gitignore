@@ -1,3 +1,4 @@
 toolchain.cmake
 build/
 compile_commands.json
+.vscode/
