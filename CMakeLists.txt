@@ -14,9 +14,10 @@ endif()
 
 find_package(Boost 1.76.0 REQUIRED)
 
-add_library(potok INTERFACE)
-target_include_directories(potok INTERFACE include)
-target_link_libraries(potok INTERFACE Boost::headers)
+add_library(potok)
+target_include_directories(potok PUBLIC include)
+target_link_libraries(potok PUBLIC Boost::headers)
+target_sources(potok PUBLIC src/span.cpp)
 
 include(CTest)
 add_subdirectory(tests)
