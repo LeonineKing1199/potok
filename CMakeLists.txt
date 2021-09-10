@@ -7,6 +7,11 @@ project(
   LANGUAGES    CXX
 )
 
+set(CMAKE_CXX_STANDARD 17 CACHE STRING "Minimum required C++ standard")
+if (CMAKE_CXX_STANDARD LESS 17)
+  message(FATAL_ERROR "Minimum required C++ standard is currently c++17")
+endif()
+
 find_package(Boost 1.76.0 REQUIRED)
 
 add_library(potok INTERFACE)
