@@ -18,4 +18,5 @@ add_library(potok INTERFACE)
 target_include_directories(potok INTERFACE include)
 target_link_libraries(potok INTERFACE Boost::headers)
 
+include(CTest)
 add_subdirectory(tests)
