@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20..3.21)
 project(
   Potok 
   VERSION      0.1.0 
-  DESCRIPTION "HTTP/2 parser and serializer targetting Boost.Asio"
+  DESCRIPTION "HTTP/2 parser and serializer targeting Boost.Asio"
   HOMEPAGE_URL https://github.com/LeonineKing1199/potok
   LANGUAGES    CXX
 )
