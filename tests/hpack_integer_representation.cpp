@@ -87,3 +87,18 @@ TEST_CASE("C.1.2. Example 2: Encoding 1337 Using a 5-Bit Prefix")
   CHECK(storage[1] == 0b10011010);
   CHECK(storage[2] == 0b00001010);
 }
+
+// https://datatracker.ietf.org/doc/html/rfc7541#appendix-C.1.3
+//
+TEST_CASE("C.1.3. Example 3: Encoding 42 Starting at an Octet Boundary")
+{
+  auto const prefix = 8;
+  auto const value  = 42;
+
+  auto storage = u8{0};
+  auto buf     = potok::span<u8>(&storage, 1);
+
+  potok::hpack::encode_integer(prefix, value, buf);
+
+  REQUIRE(storage == 0b00101010);
+}
