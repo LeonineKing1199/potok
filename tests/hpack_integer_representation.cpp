@@ -4,7 +4,9 @@
 #include <potok/span.hpp>
 
 #include <boost/assert.hpp>
+#include <boost/throw_exception.hpp>
 
+#include <stdexcept>
 #include <cstdint>
 
 namespace potok {
@@ -18,6 +20,10 @@ constexpr void encode_integer(u8 const num_prefix_bits, u64 const x, potok::span
 {
   BOOST_ASSERT(num_prefix_bits >= 1 && num_prefix_bits <= 8);
 
+  if (buf.empty()) {
+    BOOST_THROW_EXCEPTION(std::runtime_error("buf cannot be empty"));
+  }
+
   auto* out = buf.data();
 
   u64 const max_prefix_value = (u64{1} << num_prefix_bits) - 1;
@@ -28,18 +34,25 @@ constexpr void encode_integer(u8 const num_prefix_bits, u64 const x, potok::span
   }
 
   *out += max_prefix_value;
-  ++out;
 
   auto I = x - max_prefix_value;
   while (I >= 128) {
+    if (out + 1 >= buf.end()) {
+      BOOST_THROW_EXCEPTION(std::runtime_error("buf does not have enough capacity"));
+    }
+
+    ++out;
     auto const v = (I % 128 + 128);
 
     *out = v;
-    ++out;
-
     I /= 128;
   }
 
+  if (out + 1 >= buf.end()) {
+    BOOST_THROW_EXCEPTION(std::runtime_error("buf does not have enough capacity"));
+  }
+
+  ++out;
   *out = I;
 }
 
