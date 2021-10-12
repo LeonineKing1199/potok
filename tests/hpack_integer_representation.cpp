@@ -14,37 +14,33 @@ using u64 = std::uint64_t;
 
 namespace hpack {
 
-constexpr void encode_integer(u8 const prefix, u64 value, potok::span<u8> buf)
+constexpr void encode_integer(u8 const num_prefix_bits, u64 const x, potok::span<u8> buf)
 {
-  BOOST_ASSERT(prefix >= 1 && prefix <= 8);
+  BOOST_ASSERT(num_prefix_bits >= 1 && num_prefix_bits <= 8);
 
   auto* out = buf.data();
 
-  auto const max = u64{(u64{1} << (prefix)) - 1};
-  if (value < max) {
-    *out = reinterpret_cast<u8 const*>(&value)[0] << (8 - prefix);
+  u64 const max_prefix_value = (u64{1} << num_prefix_bits) - 1;
+
+  if (x < max_prefix_value) {
+    *out += x;
     return;
   }
 
-  *out = u8{255} << (8 - prefix);
+  *out += max_prefix_value;
   ++out;
 
-  value -= max;
+  auto I = x - max_prefix_value;
+  while (I >= 128) {
+    auto const v = (I % 128 + 128);
 
-  while (value >= 128) {
-    auto const v = (value % 128 + 128);
-    auto const e = v | (1 << 7);
-
-    *out = e;
+    *out = v;
     ++out;
 
-    value /= 128;
+    I /= 128;
   }
 
-  auto const v = (value % 128 + 128);
-  auto const e = v & (0b01111111);
-
-  *out = e;
+  *out = I;
 }
 
 }    // namespace hpack
@@ -56,34 +52,30 @@ using potok::u8;
 //
 TEST_CASE("C.1.1. Example 1: Encoding 10 Using a 5-Bit Prefix")
 {
-  auto const prefix = 5;
-  auto const value  = 10;
+  auto const num_prefix_bits = 5;
+  auto const value           = 10;
 
-  REQUIRE(value == 0b01010);
+  auto storage = u8{0b11100000};
 
-  auto storage = u8{0};
-  auto buf     = potok::span<u8>(&storage, 1);
+  auto buf = potok::span<u8>(&storage, 1);
 
-  potok::hpack::encode_integer(prefix, value, buf);
+  potok::hpack::encode_integer(num_prefix_bits, value, buf);
 
-  storage = storage & (0b11111000);
-
-  REQUIRE(storage == u8{0b01010000});
-  REQUIRE(storage == u8{80});
+  REQUIRE(storage == u8{0b11101010});
 }
 
 // https://datatracker.ietf.org/doc/html/rfc7541#appendix-C.1.2
 //
 TEST_CASE("C.1.2. Example 2: Encoding 1337 Using a 5-Bit Prefix")
 {
-  auto const prefix = 5;
-  auto const value  = 1337;
+  auto const num_prefix_bits = 5;
+  auto const value           = 1337;
 
   u8 storage[] = {0, 0, 0};
 
-  potok::hpack::encode_integer(prefix, value, storage);
+  potok::hpack::encode_integer(num_prefix_bits, value, storage);
 
-  CHECK(storage[0] == 0b11111000);
+  CHECK(storage[0] == 0b00011111);
   CHECK(storage[1] == 0b10011010);
   CHECK(storage[2] == 0b00001010);
 }
@@ -92,13 +84,13 @@ TEST_CASE("C.1.2. Example 2: Encoding 1337 Using a 5-Bit Prefix")
 //
 TEST_CASE("C.1.3. Example 3: Encoding 42 Starting at an Octet Boundary")
 {
-  auto const prefix = 8;
-  auto const value  = 42;
+  auto const num_prefix_bits = 8;
+  auto const value           = 42;
 
   auto storage = u8{0};
   auto buf     = potok::span<u8>(&storage, 1);
 
-  potok::hpack::encode_integer(prefix, value, buf);
+  potok::hpack::encode_integer(num_prefix_bits, value, buf);
 
   REQUIRE(storage == 0b00101010);
 }
