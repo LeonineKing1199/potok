@@ -79,23 +79,14 @@ constexpr auto encode_integer(u8 const num_prefix_bits, u64 const x, potok::span
 
   auto* out = buf.data();
 
-  if (x < max_prefix_value) {
-    if (num_prefix_bits == 8) {
-      *out++ = x;
-    }
-    else {
-      *out++ += x;
-    }
+  *out &= ~max_prefix_value;
 
+  if (x < max_prefix_value) {
+    *out++ |= x;
     return buf.subspan(num_required_octets);
   }
 
-  if (num_prefix_bits == 8) {
-    *out++ = max_prefix_value;
-  }
-  else {
-    *out++ += max_prefix_value;
-  }
+  *out++ |= max_prefix_value;
 
   auto I = x - max_prefix_value;
   while (I >= 128) {
@@ -124,7 +115,7 @@ TEST_CASE("C.1.1. Example 1: Encoding 10 Using a 5-Bit Prefix")
   auto const value           = 10;
 
   {
-    auto storage = u8{0b11100000};
+    auto storage = u8{0b11111111};
 
     auto buf = potok::span<u8>(&storage, 1);
 
@@ -134,7 +125,7 @@ TEST_CASE("C.1.1. Example 1: Encoding 10 Using a 5-Bit Prefix")
   }
 
   {
-    auto storage = u8{0b00000000};
+    auto storage = u8{0b00011111};
 
     auto buf = potok::span<u8>(&storage, 1);
 
