@@ -31,15 +31,16 @@ template <class DynamicBuffer_V2>
 auto encode_integer(u8 const         num_prefix_bits,    //
                     u64 const        x,                  //
                     DynamicBuffer_V2 buf,                //
-                    usize const      pos) -> usize
+                    usize const      offset) -> usize
 {
   BOOST_ASSERT(num_prefix_bits >= 1 && num_prefix_bits <= 8);
 
   auto const num_required_octets = get_num_required_octets(x, num_prefix_bits);
 
-  buf.grow(num_required_octets);
-  auto mutable_buf_seq = buf.data(pos, num_required_octets);
+  auto mutable_buf_seq = buf.data(offset, num_required_octets);
+  if (boost::asio::buffer_size(mutable_buf_seq) < num_required_octets) { buf.grow(num_required_octets); }
 
+  mutable_buf_seq = buf.data(offset, num_required_octets);
   if (boost::asio::buffer_size(mutable_buf_seq) < num_required_octets) {
     boost::throw_exception(std::runtime_error("Unable to extend underlying DynamicBuffer_V2"));
   }
