@@ -6,8 +6,12 @@
 #include <boost/asio/buffer.hpp>
 #include <boost/asio/buffers_iterator.hpp>
 
+#include <boost/system/error_code.hpp>
+
 #include <boost/assert.hpp>
 #include <boost/throw_exception.hpp>
+
+#include <fmt/format.h>
 
 #include <cstdint>
 #include <limits>
@@ -64,6 +68,11 @@ constexpr auto get_num_required_octets(u64 const x, u8 const num_prefix_bits) ->
   return count;
 }
 
+constexpr auto get_max_prefix_value(u8 const num_prefix_bits)
+{
+  return (u64{1} << num_prefix_bits) - 1;
+}
+
 static_assert(get_num_required_octets(14, 5) == 1);
 static_assert(get_num_required_octets(35, 5) == 2);
 static_assert(get_num_required_octets(std::numeric_limits<u64>::max(), 1) == 11);
@@ -85,7 +94,7 @@ auto encode_integer(u8 const         num_prefix_bits,    //
     boost::throw_exception(std::runtime_error("Unable to extend underlying DynamicBuffer_V2"));
   }
 
-  u64 const max_prefix_value = (u64{1} << num_prefix_bits) - 1;
+  u64 const max_prefix_value = get_max_prefix_value(num_prefix_bits);
 
   auto out = boost::asio::buffers_begin(mutable_buf_seq);
 
@@ -117,6 +126,32 @@ auto encode_integer(u8 const         num_prefix_bits,    //
   return bytes_written;
 }
 
+template <class ConstBufferSequence>
+auto decode_integer(u8 const num_prefix_bits, ConstBufferSequence const_buf_seq, boost::system::error_code&) -> u64
+{
+  BOOST_ASSERT(num_prefix_bits >= 1 && num_prefix_bits <= 8);
+
+  auto pos = boost::asio::buffers_begin(const_buf_seq);
+  auto end = boost::asio::buffers_end(const_buf_seq);
+
+  u64 const max_prefix_value = get_max_prefix_value(num_prefix_bits);
+
+  auto I = *pos & max_prefix_value;
+  if (I < max_prefix_value) { return I; }
+
+  auto M = u64{0};
+  ++pos;
+
+  auto B = u8{128};
+  while ((pos != end) && ((B & 128) == 128)) {
+    B = *pos++;
+    I = I + (B & 127) * (1 << M);
+    M += 7;
+  }
+
+  return I;
+}
+
 }    // namespace hpack
 }    // namespace potok
 
@@ -137,6 +172,9 @@ TEST_CASE("C.1.1. Example 1: Encoding 10 Using a 5-Bit Prefix")
 
     REQUIRE(1 == potok::hpack::encode_integer(num_prefix_bits, value, buf, pos));
     REQUIRE(storage[0] == u8{0b11101010});
+
+    auto ec = boost::system::error_code();
+    REQUIRE(value == potok::hpack::decode_integer(num_prefix_bits, buf.data(0, buf.size()), ec));
   }
 
   {
@@ -146,6 +184,9 @@ TEST_CASE("C.1.1. Example 1: Encoding 10 Using a 5-Bit Prefix")
 
     REQUIRE(1 == potok::hpack::encode_integer(num_prefix_bits, value, buf, pos));
     REQUIRE(storage[0] == u8{0b00001010});
+
+    auto ec = boost::system::error_code();
+    REQUIRE(value == potok::hpack::decode_integer(num_prefix_bits, buf.data(0, buf.size()), ec));
   }
 }
 
@@ -165,6 +206,9 @@ TEST_CASE("C.1.2. Example 2: Encoding 1337 Using a 5-Bit Prefix")
     CHECK(storage[0] == 0b00011111);
     CHECK(storage[1] == 0b10011010);
     CHECK(storage[2] == 0b00001010);
+
+    auto ec = boost::system::error_code();
+    REQUIRE(value == potok::hpack::decode_integer(num_prefix_bits, buf.data(0, buf.size()), ec));
   }
 
   {
@@ -177,6 +221,9 @@ TEST_CASE("C.1.2. Example 2: Encoding 1337 Using a 5-Bit Prefix")
     CHECK(storage[0] == 0b11111111);
     CHECK(storage[1] == 0b10011010);
     CHECK(storage[2] == 0b00001010);
+
+    auto ec = boost::system::error_code();
+    REQUIRE(value == potok::hpack::decode_integer(num_prefix_bits, buf.data(0, buf.size()), ec));
   }
 }
 
@@ -194,6 +241,9 @@ TEST_CASE("C.1.3. Example 3: Encoding 42 Starting at an Octet Boundary")
 
     REQUIRE(1 == potok::hpack::encode_integer(num_prefix_bits, value, buf, pos));
     REQUIRE(storage[0] == 0b00101010);
+
+    auto ec = boost::system::error_code();
+    REQUIRE(value == potok::hpack::decode_integer(num_prefix_bits, buf.data(0, buf.size()), ec));
   }
 
   {
@@ -208,5 +258,8 @@ TEST_CASE("C.1.3. Example 3: Encoding 42 Starting at an Octet Boundary")
 
     REQUIRE(storage[0] == 0b11111111);
     REQUIRE(storage[1] == 0b01000110);
+
+    auto ec = boost::system::error_code();
+    REQUIRE(value == potok::hpack::decode_integer(num_prefix_bits, buf.data(0, buf.size()), ec));
   }
 }
