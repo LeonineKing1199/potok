@@ -15,10 +15,18 @@ endif()
 find_package(Boost 1.76.0 REQUIRED)
 
 add_library(potok)
+target_compile_definitions(potok PUBLIC BOOST_ASIO_NO_DYNAMIC_BUFFER_V1)
 target_include_directories(potok PUBLIC include)
 target_link_libraries(potok PUBLIC Boost::headers)
-target_sources(potok PUBLIC src/span.cpp)
-target_compile_definitions(potok PUBLIC BOOST_ASIO_NO_DYNAMIC_BUFFER_V1)
+target_sources(
+  potok 
+  PUBLIC 
+    src/span.cpp
+    src/stdint.cpp
+    src/hpack/common.cpp
+    src/hpack/encode.cpp
+    src/hpack/decode.cpp
+)
 
 include(CTest)
 add_subdirectory(tests)

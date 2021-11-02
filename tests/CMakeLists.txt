@@ -10,4 +10,5 @@ function(potok_add_test filename)
   add_test(NAME "${stem}" COMMAND "${stem}")
 endfunction()
 
-potok_add_test(hpack_integer_representation.cpp)
+potok_add_test(hpack_encode_integer.cpp)
+potok_add_test(hpack_decode_integer.cpp)
