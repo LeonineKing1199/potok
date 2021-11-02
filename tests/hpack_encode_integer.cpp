@@ -181,3 +181,65 @@ TEST_CASE("We should be able to encode the largest u64 possible")
 
   REQUIRE(s[10] == 1);
 }
+
+TEST_CASE("We should be able to encode multiple integers in a row, using the same buffer")
+{
+  auto const num_prefix_bits = 5;
+
+  auto storage = std::vector<u8>{0x00};
+  auto buf     = boost::asio::dynamic_vector_buffer(storage);
+  auto pos     = u64{0};
+
+  {
+    auto const value = 10;
+
+    auto const n = potok::hpack::encode_integer(num_prefix_bits, value, buf, pos);
+    REQUIRE(n == 1);
+
+    REQUIRE(storage[pos] == value);
+
+    pos += n;
+  }
+
+  {
+    auto const value = 1337;
+    auto const n     = potok::hpack::encode_integer(num_prefix_bits, value, buf, pos);
+
+    REQUIRE(n == 3);
+
+    CHECK(storage[pos + 0] == 0b00011111);
+    CHECK(storage[pos + 1] == 0b10011010);
+    CHECK(storage[pos + 2] == 0b00001010);
+
+    pos += n;
+  }
+
+  {
+    auto const value = 1337;
+    auto const n     = potok::hpack::encode_integer(num_prefix_bits, value, buf, pos);
+
+    REQUIRE(n == 3);
+
+    CHECK(storage[pos + 0] == 0b00011111);
+    CHECK(storage[pos + 1] == 0b10011010);
+    CHECK(storage[pos + 2] == 0b00001010);
+
+    pos += n;
+  }
+
+  {
+    auto const value = 10;
+
+    auto const n = potok::hpack::encode_integer(num_prefix_bits, value, buf, pos);
+    REQUIRE(n == 1);
+
+    REQUIRE(storage[pos] == value);
+
+    pos += n;
+  }
+
+  REQUIRE(storage.size() == pos);
+
+  REQUIRE(storage == std::vector<u8>{0b00001010, 0b00011111, 0b10011010, 0b00001010, 0b00011111, 0b10011010, 0b00001010,
+                                     0b00001010});
+}
