@@ -136,6 +136,28 @@ TEST_CASE("If a value can fit entirely in the prefix bits, it must be written so
 
 TEST_CASE("We should be able to encode the largest u64 possible")
 {
+  // value to encode is: 18446744073709551615
+  // prefix bits = 5
+  // max prefix value = 31
+  //
+  // using the iterative algo, we first encode 31 (1)
+  //
+  // then see I trasnform as:
+  // I = 18446744073709551584 (2)
+  // I /= 128 => 144115188075855871 (3)
+  // I /= 128 => 1125899906842623 (4)
+  // I /= 128 => 8796093022207 (5)
+  // I /= 128 => 68719476735 (6)
+  // I /= 128 => 536870911 (7)
+  // I /= 128 => 4194303 (8)
+  // I /= 128 => 32767 (9)
+  // I /= 128 => 255 (10)
+  // I /= 128 => 1
+  //
+  // I finally <= 128
+  // encode final value, 1 (11)
+  //
+
   auto const num_prefix_bits = 5;
   auto const value           = std::numeric_limits<u64>::max();
 
