@@ -2,6 +2,8 @@
 #define POTOK_HPACK_ENCODE_HPP_
 
 #include <potok/hpack/common.hpp>
+#include <potok/hpack/error.hpp>
+
 #include <potok/stdint.hpp>
 
 #include <boost/asio/buffer.hpp>
@@ -27,55 +29,97 @@ namespace hpack {
 //           I = I / 128
 //      encode I on 8 bits
 
-template <class DynamicBuffer_V2>
-auto encode_integer(u8 const         num_prefix_bits,    //
-                    u64 const        x,                  //
-                    DynamicBuffer_V2 buf,                //
-                    usize const      offset) -> usize
-{
-  BOOST_ASSERT(num_prefix_bits >= 1 && num_prefix_bits <= 8);
+struct integer_encoder {
+  enum class state { first, continuation, final, done };
 
-  auto const num_required_octets = get_num_required_octets(x, num_prefix_bits);
+  u64      v_               = 0;
+  state    state_           = state::first;
+  u8 const num_prefix_bits_ = 0;
 
-  auto mutable_buf_seq = buf.data(offset, num_required_octets);
-  if (boost::asio::buffer_size(mutable_buf_seq) < num_required_octets) { buf.grow(num_required_octets); }
+  integer_encoder()                       = delete;
+  integer_encoder(integer_encoder const&) = default;
+  integer_encoder(integer_encoder&&)      = default;
 
-  mutable_buf_seq = buf.data(offset, num_required_octets);
-  if (boost::asio::buffer_size(mutable_buf_seq) < num_required_octets) {
-    boost::throw_exception(std::runtime_error("Unable to extend underlying DynamicBuffer_V2"));
+  integer_encoder(u64 const v, u8 const num_prefix_bits)
+      : v_{v}
+      , num_prefix_bits_{num_prefix_bits}
+  {
   }
 
-  u64 const max_prefix_value = get_max_prefix_value(num_prefix_bits);
+  template <class MutableBufferSequence>
+  auto operator()(MutableBufferSequence      mutable_buf_seq,    //
+                  boost::system::error_code& ec) -> usize
+  {
+    auto pos = boost::asio::buffers_begin(mutable_buf_seq);
+    auto end = boost::asio::buffers_end(mutable_buf_seq);
 
-  auto out = boost::asio::buffers_begin(mutable_buf_seq);
+    auto bytes_written = usize{0};
 
-  auto bytes_written = usize{0};
+    if (pos == end) {
+      ec = error::needs_more;
+      return bytes_written;
+    }
 
-  *out &= ~max_prefix_value;
+    u64 const max_prefix_value = get_max_prefix_value(num_prefix_bits_);
 
-  if (x < max_prefix_value) {
-    *out++ |= x;
-    ++bytes_written;
+    switch (state_) {
+      case state::first: {
+        // clear the initial octet in preparation of writing the first N bits of the integer
+        //
+        *pos &= ~max_prefix_value;
+
+        if (v_ < max_prefix_value) {
+          *pos++ |= v_;
+          ++bytes_written;
+
+          state_ = state::done;
+
+          break;
+        }
+
+        *pos++ |= max_prefix_value;
+        ++bytes_written;
+
+        state_ = state::continuation;
+
+        v_ -= max_prefix_value;
+      }
+
+      case state::continuation: {
+        for (; (pos != end) && (v_ >= 128); ++pos, ++bytes_written, v_ /= 128) {
+          auto const v = (v_ % 128 + 128);
+
+          *pos = v;
+        }
+
+        if (v_ >= 128) {
+          ec     = error::needs_more;
+          state_ = state::continuation;
+          break;
+        }
+
+        if (pos == end) {
+          ec     = error::needs_more;
+          state_ = state::final;
+          break;
+        }
+      }
+
+      case state::final: {
+        *pos++ = v_;
+        ++bytes_written;
+
+        state_ = state::done;
+        break;
+      }
+
+      case state::done:
+        break;
+    }
+
     return bytes_written;
   }
-
-  *out++ |= max_prefix_value;
-  ++bytes_written;
-
-  auto I = x - max_prefix_value;
-  while (I >= 128) {
-    auto const v = (I % 128 + 128);
-
-    *out++ = v;
-    ++bytes_written;
-    I /= 128;
-  }
-
-  *out++ = I;
-  ++bytes_written;
-
-  return bytes_written;
-}
+};
 
 }    // namespace hpack
 }    // namespace potok

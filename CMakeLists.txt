@@ -24,6 +24,7 @@ target_sources(
     src/span.cpp
     src/stdint.cpp
     src/hpack/common.cpp
+    src/hpack/error.cpp
     src/hpack/encode.cpp
     src/hpack/decode.cpp
 )
