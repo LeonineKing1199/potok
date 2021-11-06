@@ -280,33 +280,34 @@ TEST_CASE("We should be able to encode multiple integers in a row, using the sam
 
     auto e = potok::hpack::integer_encoder(value, num_prefix_bits);
 
-    auto const n = e(buf.data(pos, buf.size() - pos), ec);
-    REQUIRE(n == 1);
-    REQUIRE(storage[pos] == value);
-    REQUIRE(!ec);
-
+    auto const n = e(buf.data(pos, buf.size()), ec);
     pos += n;
+
+    REQUIRE(n == 1);
+    REQUIRE(!ec);
+    CHECK(storage[0] == value);
   }
 
   {
     auto const value = 1337;
 
     auto e = potok::hpack::integer_encoder(value, num_prefix_bits);
-    auto n = e(buf.data(pos, buf.size() - pos), ec);
+    auto n = e(buf.data(pos, buf.size()), ec);
+    pos += n;
 
     REQUIRE(n == 0);
     REQUIRE(ec == potok::hpack::error::needs_more);
 
     buf.grow(3);
 
-    n = e(buf.data(pos, buf.size() - pos), ec);
+    n = e(buf.data(pos, buf.size()), ec);
+    pos += n;
+
     REQUIRE(n == 3);
     REQUIRE(!ec);
-    REQUIRE(storage[pos + 0] == 0b00011111);
-    REQUIRE(storage[pos + 1] == 0b10011010);
-    REQUIRE(storage[pos + 2] == 0b00001010);
-
-    pos += n;
+    CHECK(storage[1] == 0b00011111);
+    CHECK(storage[2] == 0b10011010);
+    CHECK(storage[3] == 0b00001010);
   }
 
   {
@@ -315,22 +316,22 @@ TEST_CASE("We should be able to encode multiple integers in a row, using the sam
     buf.grow(2);
 
     auto e = potok::hpack::integer_encoder(value, num_prefix_bits);
-    auto n = e(buf.data(pos, buf.size() - pos), ec);
+    auto n = e(buf.data(pos, buf.size()), ec);
+    pos += n;
 
     REQUIRE(n == 2);
     REQUIRE(ec == potok::hpack::error::needs_more);
 
     buf.grow(1);
-    n = e(buf.data(pos + n, buf.size() - pos - n), ec);
+    n = e(buf.data(pos, buf.size()), ec);
+    pos += n;
 
     REQUIRE(n == 1);
     REQUIRE(!ec);
 
-    REQUIRE(storage[pos + 0] == 0b00011111);
-    REQUIRE(storage[pos + 1] == 0b10011010);
-    REQUIRE(storage[pos + 2] == 0b00001010);
-
-    pos += 3;
+    CHECK(storage[4] == 0b00011111);
+    CHECK(storage[5] == 0b10011010);
+    CHECK(storage[6] == 0b00001010);
   }
 
   {
@@ -340,16 +341,19 @@ TEST_CASE("We should be able to encode multiple integers in a row, using the sam
 
     auto       e = potok::hpack::integer_encoder(value, num_prefix_bits);
     auto const n = e(buf.data(pos, buf.size() - pos), ec);
+    pos += n;
 
     REQUIRE(n == 1);
     REQUIRE(!ec);
-    REQUIRE(storage[pos] == value);
-
-    pos += n;
+    CHECK(storage[7] == value);
   }
 
   REQUIRE(storage.size() == pos);
 
-  REQUIRE(storage == std::vector<u8>{0b00001010, 0b00011111, 0b10011010, 0b00001010, 0b00011111, 0b10011010, 0b00001010,
-                                     0b00001010});
+  auto const expected =
+      std::vector<u8>{0b00001010, 0b00011111, 0b10011010, 0b00001010, 0b00011111, 0b10011010, 0b00001010, 0b00001010};
+
+  for (unsigned i = 0; i < expected.size(); ++i) {
+    CHECK(storage[i] == expected[i]);
+  }
 }
