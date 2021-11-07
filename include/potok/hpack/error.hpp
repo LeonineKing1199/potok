@@ -9,7 +9,15 @@
 namespace potok {
 namespace hpack {
 
-enum class error : int { needs_more };
+enum class error : int {
+  // the encoder/decoder need more octets to finish their operations
+  //
+  needs_more,
+  // the ConstBufferSequence contains valid continuation bytes in the integer encoding but would exceed the 64-bit limit
+  // imposed by the implementation
+  //
+  too_large
+};
 
 struct hpack_error_category final : public boost::system::error_category {
   auto name() const noexcept -> char const* override
