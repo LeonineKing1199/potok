@@ -106,7 +106,7 @@ struct integer_decoder {
         break;
     }
 
-    v = v_;
+    if (!ec && state_ == state::done) { v = v_; }
     return bytes_read;
   }
 };
