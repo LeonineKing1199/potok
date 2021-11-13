@@ -166,7 +166,6 @@ TEST_CASE("We should be able to decode the largest u64 correctly")
 TEST_CASE("We should handle empty octet sequences correctly")
 {
   auto const num_prefix_bits = 5;
-  auto const max             = potok::hpack::get_max_prefix_value(num_prefix_bits);
 
   auto d = potok::hpack::integer_decoder(num_prefix_bits);
 
