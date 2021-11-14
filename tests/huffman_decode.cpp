@@ -7,6 +7,7 @@
 #include <boost/assert.hpp>
 
 #include <memory_resource>
+#include <optional>
 #include <vector>
 
 namespace potok {
@@ -109,249 +110,94 @@ namespace huffman {
 
 using namespace potok::ints;
 
-auto update_testing_mask(u32 const testing_mask, u32 const testing_mask_len, u8 const octet, u8 const octet_idx) -> u32
+auto codeword_match(u32 const* codewords, u32 const* masks, usize const len, u32 const v) -> std::optional<usize>
 {
-  BOOST_ASSERT(octet_idx >= 0);
-  BOOST_ASSERT(octet_idx <= 7);
-  BOOST_ASSERT(testing_mask_len >= 0);
-  BOOST_ASSERT(testing_mask_len <= 31);
-
-  auto m = u32{0};
-  u32  x = (octet >> (8 - (octet_idx + 1))) & 1;
-
-  m = testing_mask | (x << (31 - testing_mask_len));
-  return m;
-}
-
-auto codeword_match(u32 const codeword, u32 const testing_mask, u32 const testing_mask_len) -> bool
-{
-  auto const v = (codeword ^ testing_mask) & (~u32{0} << (32 - testing_mask_len));
-  return (v == 0);
-}
-
-TEST_CASE("Initial empty mask")
-{
-  auto test_mask        = u32{0};
-  auto testing_mask_len = u32{0};
-
-  auto octet     = 0b11100000;
-  auto octet_idx = 0;
-
-  {
-    test_mask = update_testing_mask(test_mask, testing_mask_len, octet, octet_idx);
-    ++testing_mask_len;
-    ++octet_idx;
-    REQUIRE(test_mask == 0x80000000);
+  for (usize i = 0; i < len; ++i) {
+    if ((masks[i] & v) == codewords[i]) { return {i}; }
   }
 
-  {
-    test_mask = update_testing_mask(test_mask, testing_mask_len, octet, octet_idx);
-    ++testing_mask_len;
-    ++octet_idx;
-    REQUIRE(test_mask == 0xc0000000);
-  }
-
-  {
-    test_mask = update_testing_mask(test_mask, testing_mask_len, octet, octet_idx);
-    ++testing_mask_len;
-    ++octet_idx;
-    REQUIRE(test_mask == 0xe0000000);
-  }
-
-  for (int i = 0; i < 5; ++i) {
-    test_mask = update_testing_mask(test_mask, testing_mask_len, octet, octet_idx);
-    ++testing_mask_len;
-    ++octet_idx;
-    REQUIRE(test_mask == 0xe0000000);
-  }
-}
-
-TEST_CASE("Partially filled testing mask")
-{
-  auto test_mask        = u32{0xffff0000};
-  auto testing_mask_len = u32{16};
-
-  auto octet     = 0b11100011;
-  auto octet_idx = 0;
-
-  {
-    test_mask = update_testing_mask(test_mask, testing_mask_len, octet, octet_idx);
-    ++testing_mask_len;
-    ++octet_idx;
-    REQUIRE(test_mask == 0xffff8000);
-  }
-
-  {
-    test_mask = update_testing_mask(test_mask, testing_mask_len, octet, octet_idx);
-    ++testing_mask_len;
-    ++octet_idx;
-    REQUIRE(test_mask == 0xffffc000);
-  }
-
-  {
-    test_mask = update_testing_mask(test_mask, testing_mask_len, octet, octet_idx);
-    ++testing_mask_len;
-    ++octet_idx;
-    REQUIRE(test_mask == 0xffffe000);
-  }
-
-  for (int i = 0; i < 3; ++i) {
-    test_mask = update_testing_mask(test_mask, testing_mask_len, octet, octet_idx);
-    ++testing_mask_len;
-    ++octet_idx;
-    REQUIRE(test_mask == 0xffffe000);
-  }
-
-  {
-    test_mask = update_testing_mask(test_mask, testing_mask_len, octet, octet_idx);
-    ++testing_mask_len;
-    ++octet_idx;
-    REQUIRE(test_mask == 0xffffe200);
-  }
-
-  {
-    test_mask = update_testing_mask(test_mask, testing_mask_len, octet, octet_idx);
-    ++testing_mask_len;
-    ++octet_idx;
-    REQUIRE(test_mask == 0xffffe300);
-  }
+  return {};
 }
 
 TEST_CASE("Codeword matching!")
 {
-  auto const codeword = u32{0xe100e100};
+  //    'i' (105)  |00110                                         6  [ 5]
+  //    'o' (111)  |00111                                         7  [ 5]
 
-  u8 const octets[4] = {0xe1, 0x00, 0xe1, 0x00};
+  u32 const masks[]     = {u32{0xf8} << 24, u32{0xf8} << 24};
+  u32 const codewords[] = {0x06 << 27, 0x07 << 27};
+  u32 const bit_lens[]  = {5, 5};
 
-  auto testing_mask     = u32{0};
-  auto testing_mask_len = u32{0};
-  auto match            = false;
+  u32 v = u32{0b00110'00111'00110'00111'00110'00111'11};
+
+  REQUIRE((masks[0] & codewords[0]) == codewords[0]);
+  REQUIRE((masks[0] & v) == codewords[0]);
+
+  auto maybe_idx = std::optional<usize>();
+  auto idx       = usize{0};
 
   {
-    auto const octet     = octets[0];
-    auto       octet_idx = u8{0};
+    maybe_idx = codeword_match(codewords, masks, 2, v);
+    REQUIRE(maybe_idx);
 
-    testing_mask = update_testing_mask(testing_mask, testing_mask_len, octet, octet_idx);
-    ++testing_mask_len;
-    ++octet_idx;
+    idx = *maybe_idx;
+    REQUIRE(idx == 0);
 
-    match = codeword_match(codeword, testing_mask, testing_mask_len);
-    REQUIRE(testing_mask == 0x80000000);
-    REQUIRE(match);
-
-    testing_mask = update_testing_mask(testing_mask, testing_mask_len, octet, octet_idx);
-    ++testing_mask_len;
-    ++octet_idx;
-
-    match = codeword_match(codeword, testing_mask, testing_mask_len);
-    REQUIRE(testing_mask == 0xc0000000);
-    REQUIRE(match);
-
-    testing_mask = update_testing_mask(testing_mask, testing_mask_len, octet, octet_idx);
-    ++testing_mask_len;
-    ++octet_idx;
-
-    match = codeword_match(codeword, testing_mask, testing_mask_len);
-    REQUIRE(testing_mask == 0xe0000000);
-    REQUIRE(match);
-    REQUIRE(testing_mask_len == 3);
-
-    for (int i = 0; i < 4; ++i) {
-      testing_mask = update_testing_mask(testing_mask, testing_mask_len, octet, octet_idx);
-      ++testing_mask_len;
-      ++octet_idx;
-
-      match = codeword_match(codeword, testing_mask, testing_mask_len);
-      REQUIRE(testing_mask == 0xe0000000);
-      REQUIRE(match);
-    }
-
-    testing_mask = update_testing_mask(testing_mask, testing_mask_len, octet, octet_idx);
-    ++testing_mask_len;
-    ++octet_idx;
-
-    match = codeword_match(codeword, testing_mask, testing_mask_len);
-    REQUIRE(testing_mask == 0xe1000000);
-    REQUIRE(match);
-    REQUIRE(testing_mask_len == 8);
+    v <<= bit_lens[idx];
   }
 
   {
-    auto const octet     = octets[1];
-    auto       octet_idx = u8{0};
+    maybe_idx = codeword_match(codewords, masks, 2, v);
+    REQUIRE(maybe_idx);
 
-    for (int i = 0; i < 8; ++i) {
-      testing_mask = update_testing_mask(testing_mask, testing_mask_len, octet, octet_idx);
-      ++testing_mask_len;
-      ++octet_idx;
+    idx = *maybe_idx;
+    REQUIRE(idx == 1);
 
-      match = codeword_match(codeword, testing_mask, testing_mask_len);
-      REQUIRE(testing_mask == 0xe1000000);
-      REQUIRE(match);
-    }
+    v <<= bit_lens[idx];
   }
 
   {
-    auto const octet     = octets[2];
-    auto       octet_idx = u8{0};
+    maybe_idx = codeword_match(codewords, masks, 2, v);
+    REQUIRE(maybe_idx);
 
-    testing_mask = update_testing_mask(testing_mask, testing_mask_len, octet, octet_idx);
-    ++testing_mask_len;
-    ++octet_idx;
+    idx = *maybe_idx;
+    REQUIRE(idx == 0);
 
-    match = codeword_match(codeword, testing_mask, testing_mask_len);
-    REQUIRE(testing_mask == 0xe1008000);
-    REQUIRE(match);
-
-    testing_mask = update_testing_mask(testing_mask, testing_mask_len, octet, octet_idx);
-    ++testing_mask_len;
-    ++octet_idx;
-
-    match = codeword_match(codeword, testing_mask, testing_mask_len);
-    REQUIRE(testing_mask == 0xe100c000);
-    REQUIRE(match);
-
-    testing_mask = update_testing_mask(testing_mask, testing_mask_len, octet, octet_idx);
-    ++testing_mask_len;
-    ++octet_idx;
-
-    match = codeword_match(codeword, testing_mask, testing_mask_len);
-    REQUIRE(testing_mask == 0xe100e000);
-    REQUIRE(match);
-
-    for (int i = 0; i < 4; ++i) {
-      testing_mask = update_testing_mask(testing_mask, testing_mask_len, octet, octet_idx);
-      ++testing_mask_len;
-      ++octet_idx;
-
-      match = codeword_match(codeword, testing_mask, testing_mask_len);
-      REQUIRE(testing_mask == 0xe100e000);
-      REQUIRE(match);
-    }
-
-    testing_mask = update_testing_mask(testing_mask, testing_mask_len, octet, octet_idx);
-    ++testing_mask_len;
-    ++octet_idx;
-
-    match = codeword_match(codeword, testing_mask, testing_mask_len);
-    REQUIRE(testing_mask == 0xe100e100);
-    REQUIRE(match);
+    v <<= bit_lens[idx];
   }
 
   {
-    auto const octet     = octets[3];
-    auto       octet_idx = u8{0};
+    maybe_idx = codeword_match(codewords, masks, 2, v);
+    REQUIRE(maybe_idx);
 
-    for (int i = 0; i < 8; ++i) {
-      testing_mask = update_testing_mask(testing_mask, testing_mask_len, octet, octet_idx);
-      ++testing_mask_len;
-      ++octet_idx;
+    idx = *maybe_idx;
+    REQUIRE(idx == 1);
 
-      match = codeword_match(codeword, testing_mask, testing_mask_len);
-      REQUIRE(testing_mask == 0xe100e100);
-      REQUIRE(match);
-    }
+    v <<= bit_lens[idx];
   }
 
-  REQUIRE(testing_mask_len == 32);
+  {
+    maybe_idx = codeword_match(codewords, masks, 2, v);
+    REQUIRE(maybe_idx);
+
+    idx = *maybe_idx;
+    REQUIRE(idx == 0);
+
+    v <<= bit_lens[idx];
+  }
+
+  {
+    maybe_idx = codeword_match(codewords, masks, 2, v);
+    REQUIRE(maybe_idx);
+
+    idx = *maybe_idx;
+    REQUIRE(idx == 1);
+
+    v <<= bit_lens[idx];
+  }
+
+  {
+    maybe_idx = codeword_match(codewords, masks, 2, v);
+    REQUIRE(!maybe_idx);
+  }
 }
